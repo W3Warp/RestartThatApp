@@ -31,16 +31,15 @@ Clear-Host
 #endregion DESCRIPTION
 
 #region WHITELIST & OUTPUTS
-$whitelist = '(notepads.*|firefox.*)$'
+$whitelist = '(notepad.*|firefox.*)$'
 
 # Write-Outputs
 $TaskExist      = "Task Already Exist, Moving On!`n"
 $TaskMissing    = "Task Doesn't Exist!, Creating. . ."
 $Events         = 'Querying Event Log. . .'
-$Whitelisted    = "has crashed but on the whitelist`n"
-$Blacklisted    = "has crashed and is NOT on the whitelist`n"
-$AppDir         = 'Locating Application. . .'
-$RestartThatApp = 'found! restarting'
+$Whitelisted    = "crashed but on the whitelist`n"
+$Blacklisted    = "crashed and was NOT on the whitelist`n"
+$RestartThatApp = "Locating Application. . .`nfound! restarting"
 $Done           = "`nI'm done here!"
 
 #endregion WHITELIST & OUTPUTS
@@ -145,8 +144,9 @@ $Application = if ($EventMsg -match '(?<=:).*(?=, v)')
 #region WHITELIST
 if ($Application -Match $whitelist)
 {
+ $Report = "`n`n$Application $Whitelisted $Done"
 	Write-Output "$Application $Whitelisted $Done"
-	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Application $Whitelisted" -Category 1 -RawData 10, 20
+	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 }
 else
 {
@@ -154,8 +154,6 @@ else
 #endregion WHITELIST
 
 #region Get-AppPath
-	Write-Output -InputObject $AppDir
-
 	function Get-AppPath
 	{
 		<#
@@ -200,11 +198,11 @@ else
 		Where-Object -Property Name -EQ -Value $Application |
 	Select-Object -First 1 -ExpandProperty FullName)
 	{
-		Write-Output "$RestartThatApp $Item"
-		Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Application $Blacklisted" -Category 1 -RawData 10, 20
+	$Report = "`n`n$Events`n$Application $Blacklisted`n$RestartThatApp $Item`n$Done"
+		Write-Output "$RestartThatApp $Item`n$Done"
+		Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 		Start-Process -FilePath $Item
 	}
-	Write-Output -InputObject $Done
 }
 #endregion RESTART THAT APP
 
