@@ -1,4 +1,4 @@
-﻿#requires -Version 3
+#requires -Version 3
 Clear-Host
 
 #region DESCRIPTION
@@ -201,7 +201,7 @@ else
 	Select-Object -First 1 -ExpandProperty FullName)
 	{
 		Write-Output "$RestartThatApp $Item"
-		Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Blacklisted" -Category 1 -RawData 10, 20
+		Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Application $Blacklisted" -Category 1 -RawData 10, 20
 		Start-Process -FilePath $Item
 	}
 	Write-Output -InputObject $Done
