@@ -120,7 +120,7 @@ $varFile = $template | Tee-Object -Variable RestartThatApp.xml
 # Manipulate XML Content.
 	[xml]$getXML = Get-Content $varFile
 			 $getXML.Task.Actions.Exec.Command = 'powershell.exe'
-			 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -ExecutionPolicy ByPass -File $ps1File"
+			 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
 			 $getXML.Task.Actions.Exec.WorkingDirectory = 'C:\Windows\System32\WindowsPowerShell\v1.0'
 			 $getXML.Save($xmlFile)
 
