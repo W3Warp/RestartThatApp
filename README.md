@@ -2,7 +2,7 @@
 Automatically restart failed application
 
 		Author: Blackkatt
-		Version: 1.1.0
+		Version: 1.1.1
 		Name: RestartThatApp
 
 		Purpose: Restart failed application
