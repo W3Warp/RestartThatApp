@@ -3,7 +3,7 @@ Clear-Host
 
 <#
 		Author: Blackkatt
-		Version: 1.1.1
+		Version: 1.1.2
 		Name: RestartThatApp
 
 		Purpose: Restart failed application
@@ -13,14 +13,24 @@ Clear-Host
 
 		What Will Happen:
 		the task 'RestartThatApp.xml' is created & imported under "Event Viewer Tasks\RestartThatApp"
-		the task will (Trigger On an event Event 1000, Application Error) - then restart that application if not on the "whitelist"
+		the task will (Trigger On an Event 1000, Application Error) - then restart that application if not on the "whitelist"
 		if 'RestartThatApp.ps1' is moved after install, the task will stop working.
 
 		Whitelist:
-		Applications on the list will not be restarted if they crash. Follow the current format to add/remove.
+		Applications on this list will not be restarted if they crash. Follow the current format below to add/remove.
 #>
 
-$Whitelist = '(notepads.*|firefox.*)$'
+$Whitelist = '(notepad.*|firefox.*|chrome.*)$'
+
+
+# You may change the Outputs if you like.
+$TaskExist      = 'Task Already Exist, Moving On!'
+$TaskMissing    = "Task Doesn't Exist, Creating!"
+$Events         = 'Querying Event Log. . .'
+$Whitelisted    = 'has crashed but on the whitelist.'
+$Blacklisted    = 'has crashed and NOT on the whitelist. . .'
+$RestartThatApp = "Locating Application. . .`nrestarting"
+$Done           = "I'm done here! thanks for playing."
 
 
 #region CREATE TASK
@@ -115,27 +125,17 @@ $AppName      = $AppPathSplit.Item(2)
 #endregion GET-EVENT LOG
 #region RESTART THAT APP
 
-# Outputs if you like to change them.
-$TaskExist      = 'Task Already Exist, Moving On!'
-$TaskMissing    = "Task Doesn't Exist, Creating!"
-$Events         = "`nQuerying Event Log. . ."
-$Whitelisted    = "has crashed but on the whitelist.`n"
-$Blacklisted    = "has crashed and NOT on the whitelist. . .`n"
-$RestartThatApp = "Locating Application. . .`nrestarting"
-$Done           = "`nI'm done here! thanks for playing."
-
 if ($AppName -Match $Whitelist)
 {
-	$Report = "`n$Events`n$AppName $Whitelisted $Done"
+	$Report = "`n`n$Events`n$AppName $Whitelisted $Done"
 	Write-Output -InputObject "$Report"
 	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 }
 else
 {
-	$Report = "`n$Events`n$AppName $Blacklisted`n$RestartThatApp $AppName ($AppPath)`n$Done"
+	$Report = "`n`n$Events`n$AppName $Blacklisted`n`n$RestartThatApp $AppName ($AppPath)`n`n$Done"
 	Write-Output -InputObject "$Report"
 	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 	Start-Process -FilePath $AppPath
 }
-
 #endregion RESTART THAT APP
