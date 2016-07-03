@@ -21,14 +21,6 @@ $ImportTask = 'C:\Windows\System32\schtasks.exe'
 
 		Whitelist:
 		add to the list simply follow the example bellow. applications on the whitelist will not be restarted if crashed.
-
-		Folders:
-		add/change directories goto  "#region Get-AppPath"  follow the example
-		$folders = ('C:\Program Files\', 'C:\Program Files (x86)\'),
-
-		Exclude:
-		add/change folders to exclude goto  "#region Get-AppPath" follow the example
-		$exclude = '(BankID.*|COMODO.*|Flirc.*|Google.*|HP\\HP.*|KeePass.*|microsoft.*|NVIDIA.*|VulkanRT.*|Windows.*)$',
 #>
 #endregion DESCRIPTION
 
