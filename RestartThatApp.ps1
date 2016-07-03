@@ -6,7 +6,7 @@ $ImportTask = 'C:\Windows\System32\schtasks.exe'
 #region DESCRIPTION
 <#
 		Author: Blackkatt
-		Version: 1.0.0
+		Version: 1.1.0
 		Name: RestartThatApp
 
 		Purpose: Restart failed application
