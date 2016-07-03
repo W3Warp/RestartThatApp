@@ -1,12 +1,9 @@
 #requires -Version 3
 Clear-Host
-Get-Module -Name ScheduledTask
-$ImportTask = 'C:\Windows\System32\schtasks.exe'
 
-#region DESCRIPTION
 <#
 		Author: Blackkatt
-		Version: 1.1.0
+		Version: 1.1.1
 		Name: RestartThatApp
 
 		Purpose: Restart failed application
@@ -20,36 +17,24 @@ $ImportTask = 'C:\Windows\System32\schtasks.exe'
 		if 'RestartThatApp.ps1' is moved after install, the task will stop working.
 
 		Whitelist:
-		add to the list simply follow the example bellow. applications on the whitelist will not be restarted if crashed.
+		Applications on the list will not be restarted if they crash. Follow the current format to add/remove.
 #>
-#endregion DESCRIPTION
-
-#region WHITELIST & OUTPUTS
 
 $Whitelist = '(notepads.*|firefox.*)$'
 
-# Write-Outputs
-$TaskExist      = 'Task Already Exist, Moving On!'
-$TaskMissing    = "Task Doesn't Exist, Creating!"
-$Events         = "`nQuerying Event Log. . ."
-$Whitelisted    = "crashed but on the whitelist.`n"
-$Blacklisted    = "crashed and was NOT on the whitelist. . .`n"
-$RestartThatApp = "Locating Application. . .`nfound! restarting"
-$Done           = "`nI'm done here!"
-
-#endregion WHITELIST & OUTPUTS
 
 #region CREATE TASK
 
 $GetTask = Get-ScheduledTask -TaskPath '\Event Viewer Tasks\' -TaskName RestartThatApp -ErrorAction SilentlyContinue
+
 if($GetTask)
-{Write-Output -InputObject $TaskExist}
+{
+	Write-Output -InputObject $TaskExist # Don't Create Task
+}
 else
 {
-	Write-Output -InputObject $TaskMissing
-
-# Create Sample XML.
-$template = @"
+	Write-Output -InputObject $TaskMissing # Create Task
+	$template = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
@@ -93,38 +78,34 @@ $template = @"
   </Settings>
   <Actions Context="Author">
     <Exec>
-      <Command></Command>
+      <Command>powershell.exe</Command>
       <Arguments></Arguments>
-      <WorkingDirectory></WorkingDirectory>
+      <WorkingDirectory>C:\Windows\System32\WindowsPowerShell\v1.0</WorkingDirectory>
     </Exec>
   </Actions>
 </Task>
 "@
-$varFile = $template | Tee-Object -Variable RestartThatApp.xml
+	$varFile = $template | Tee-Object -Variable RestartThatApp.xml
 
-# Current Location.
-Set-Location $PSScriptRoot
-$varFile = 'Variable:\RestartThatApp.xml'
-$xmlFile = "$PWD\RestartThatApp.xml"
-$ps1File = @"
+	# Current Location.
+	Set-Location $PSScriptRoot
+	$varFile = 'Variable:\RestartThatApp.xml'
+	$xmlFile = "$PWD\RestartThatApp.xml"
+	$ps1File = @"
 "$PWD\RestartThatApp.ps1"
 "@
 	
-# Manipulate XML Content.
-[xml]$getXML = Get-Content $varFile
-		 $getXML.Task.Actions.Exec.Command = 'powershell.exe'
-		 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
-		 $getXML.Task.Actions.Exec.WorkingDirectory = 'C:\Windows\System32\WindowsPowerShell\v1.0'
-		 $getXML.Save($xmlFile)
-
-		&$ImportTask /create /tn 'Event Viewer Tasks\RestartThatApp' /XML $xmlFile
+	# Manipulate XML Content.
+	[xml]$getXML = Get-Content $varFile
+			 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
+			 $getXML.Save($xmlFile)
+	
+	# Import Task.
+		schtasks.exe /create /tn 'Event Viewer Tasks\RestartThatApp' /XML $xmlFile
 }
-
 #endregion CREATE TASK
-
 #region GET-EVENT LOG
 
-Write-Output -InputObject $Events
 $GetEvent     = Get-WinEvent -ProviderName 'Application Error' -MaxEvents 1
 $EventMessage = $GetEvent.Message 
 $AppPath      = [regex]::Match($EventMessage,'(Faulting application path: )(.:\\.*\.exe)').Groups[2].Value
@@ -132,24 +113,29 @@ $AppPathSplit = $AppPath.Split('\')
 $AppName      = $AppPathSplit.Item(2)
 
 #endregion GET-EVENT LOG
+#region RESTART THAT APP
 
-#region WHITELIST
-if ($AppName -Match $whitelist)
+# Outputs if you like to change them.
+$TaskExist      = 'Task Already Exist, Moving On!'
+$TaskMissing    = "Task Doesn't Exist, Creating!"
+$Events         = "`nQuerying Event Log. . ."
+$Whitelisted    = "has crashed but on the whitelist.`n"
+$Blacklisted    = "has crashed and NOT on the whitelist. . .`n"
+$RestartThatApp = "Locating Application. . .`nrestarting"
+$Done           = "`nI'm done here! thanks for playing."
+
+if ($AppName -Match $Whitelist)
 {
-	$Report = "`n`n$AppName $Whitelisted $Done"
-	Write-Output -InputObject "$AppName $Whitelisted $Done"
+	$Report = "`n$Events`n$AppName $Whitelisted $Done"
+	Write-Output -InputObject "$Report"
 	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 }
 else
 {
-	Write-Output -InputObject "$AppName $Blacklisted"
-	#endregion WHITELIST
-
-	#region RESTART THAT APP
-	$Report = "`n`n$Events`n$AppName $Blacklisted`n$RestartThatApp $AppPath`n$Done"
-	Write-Output -InputObject "$RestartThatApp $AppPath`n$Done"
+	$Report = "`n$Events`n$AppName $Blacklisted`n$RestartThatApp $AppName ($AppPath)`n$Done"
+	Write-Output -InputObject "$Report"
 	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 	Start-Process -FilePath $AppPath
 }
-#endregion RESTART THAT APP
 
+#endregion RESTART THAT APP
