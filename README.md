@@ -2,7 +2,7 @@
 Automatically restart failed application
 
 		Author: Blackkatt
-		Version: 1.1.1
+		Version: 1.1.2
 		Name: RestartThatApp
 
 		Purpose: Restart failed application
@@ -17,5 +17,4 @@ Automatically restart failed application
 		also, the script will write Event entry in "Windows Powershell" found under "Applications and Service Logs"
 
 		Whitelist:
-		Applications on the list will not be restarted if they crash. Follow the current format to add/remove.
-
+		Applications on this list will not be restarted if they crash. Follow the current format below to add/remove.
