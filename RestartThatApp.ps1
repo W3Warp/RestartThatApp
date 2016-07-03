@@ -1,5 +1,7 @@
 #requires -Version 3
 Clear-Host
+Get-Module -Name ScheduledTask
+$ImportTask = 'C:\Windows\System32\schtasks.exe'
 
 #region DESCRIPTION
 <#
@@ -31,25 +33,25 @@ Clear-Host
 #endregion DESCRIPTION
 
 #region WHITELIST & OUTPUTS
-$whitelist = '(notepad.*|firefox.*)$'
+
+$Whitelist = '(notepads.*|firefox.*)$'
 
 # Write-Outputs
-$TaskExist      = "Task Already Exist, Moving On!`n"
-$TaskMissing    = "Task Doesn't Exist!, Creating. . ."
-$Events         = 'Querying Event Log. . .'
-$Whitelisted    = "crashed but on the whitelist`n"
-$Blacklisted    = "crashed and was NOT on the whitelist`n"
+$TaskExist      = 'Task Already Exist, Moving On!'
+$TaskMissing    = "Task Doesn't Exist, Creating!"
+$Events         = "`nQuerying Event Log. . ."
+$Whitelisted    = "crashed but on the whitelist.`n"
+$Blacklisted    = "crashed and was NOT on the whitelist. . .`n"
 $RestartThatApp = "Locating Application. . .`nfound! restarting"
 $Done           = "`nI'm done here!"
 
 #endregion WHITELIST & OUTPUTS
 
 #region CREATE TASK
+
 $GetTask = Get-ScheduledTask -TaskPath '\Event Viewer Tasks\' -TaskName RestartThatApp -ErrorAction SilentlyContinue
 if($GetTask)
-{
-	Write-Output -InputObject $TaskExist
-}
+{Write-Output -InputObject $TaskExist}
 else
 {
 	Write-Output -InputObject $TaskMissing
@@ -109,100 +111,53 @@ $template = @"
 $varFile = $template | Tee-Object -Variable RestartThatApp.xml
 
 # Current Location.
-	Set-Location $PSScriptRoot
-	$varFile = 'Variable:\RestartThatApp.xml'
-	$xmlFile = "$PWD\RestartThatApp.xml"
-	$ps1File = 
-	@"
+Set-Location $PSScriptRoot
+$varFile = 'Variable:\RestartThatApp.xml'
+$xmlFile = "$PWD\RestartThatApp.xml"
+$ps1File = @"
 "$PWD\RestartThatApp.ps1"
 "@
 	
 # Manipulate XML Content.
-	[xml]$getXML = Get-Content $varFile
-			 $getXML.Task.Actions.Exec.Command = 'powershell.exe'
-			 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
-			 $getXML.Task.Actions.Exec.WorkingDirectory = 'C:\Windows\System32\WindowsPowerShell\v1.0'
-			 $getXML.Save($xmlFile)
+[xml]$getXML = Get-Content $varFile
+		 $getXML.Task.Actions.Exec.Command = 'powershell.exe'
+		 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
+		 $getXML.Task.Actions.Exec.WorkingDirectory = 'C:\Windows\System32\WindowsPowerShell\v1.0'
+		 $getXML.Save($xmlFile)
 
-# Import the task.
-	C:\Windows\System32\schtasks.exe /create /tn 'Event Viewer Tasks\RestartThatApp' /XML $xmlFile
+		&$ImportTask /create /tn 'Event Viewer Tasks\RestartThatApp' /XML $xmlFile
 }
+
 #endregion CREATE TASK
 
 #region GET-EVENT LOG
-Write-Output -InputObject $Events
 
-$GetEvent = Get-EventLog -LogName Application -EntryType Error -Message 'Faulting application name:*' -Newest 1
-$EventMsg = $GetEvent.Message # filter that message
-$Application = if ($EventMsg -match '(?<=:).*(?=, v)')
-{
-	$matches[0] -replace '\s', ''
-} # clean that string
+Write-Output -InputObject $Events
+$GetEvent     = Get-WinEvent -ProviderName 'Application Error' -MaxEvents 1
+$EventMessage = $GetEvent.Message 
+$AppPath      = [regex]::Match($EventMessage,'(Faulting application path: )(.:\\.*\.exe)').Groups[2].Value
+$AppPathSplit = $AppPath.Split('\')
+$AppName      = $AppPathSplit.Item(2)
 
 #endregion GET-EVENT LOG
 
 #region WHITELIST
-if ($Application -Match $whitelist)
+if ($AppName -Match $whitelist)
 {
- $Report = "`n`n$Application $Whitelisted $Done"
-	Write-Output "$Application $Whitelisted $Done"
+	$Report = "`n`n$AppName $Whitelisted $Done"
+	Write-Output -InputObject "$AppName $Whitelisted $Done"
 	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
 }
 else
 {
-	Write-Output "$Application $Blacklisted"
-#endregion WHITELIST
+	Write-Output -InputObject "$AppName $Blacklisted"
+	#endregion WHITELIST
 
-#region Get-AppPath
-	function Get-AppPath
-	{
-		<#
-				.SYNOPSIS
-				Get applications from folders
-				.DESCRIPTION
-				Exclude defined folders and Filter extensions
-				.EXAMPLE
-				$GetAppPath = Get-AppPath | Sort-Object -Unique
-				.EXAMPLE
-				Get-AppPath | Where-Object -Property Name -eq $Application | Select-Object -First 1 -ExpandProperty FullName
-		#>
-		[CmdletBinding()]
-		param
-		(
-			[Parameter(Mandatory = $false, Position = 0)]
-			[Object]
-			$folders = ('C:\Program Files\', 'C:\Program Files (x86)\'),
-
-			[Parameter(Mandatory = $false, Position = 1)]
-			[System.String]
-			$exclude = '(BankID.*|COMODO.*|Flirc.*|Google.*|HP\\HP.*|KeePass.*|microsoft.*|NVIDIA.*|VulkanRT.*|Windows.*)$',
-
-			[Parameter(Mandatory = $false, Position = 2)]
-			[System.String]
-			$extensions = '*.exe'
-		)
-
-		Get-ChildItem -LiteralPath $folders -Filter $extensions -Recurse |
-		Where-Object -FilterScript {
-			$_.Name -notlike 'Unins*'
-		} |
-		Where-Object -FilterScript {
-			$_.DirectoryName -notmatch $exclude
-		}
-	}
-#endregion Get-AppPath
-
-#region RESTART THAT APP
-	$GetAppPath = Get-AppPath | Sort-Object -Unique
-	if ($Item = $GetAppPath |
-		Where-Object -Property Name -EQ -Value $Application |
-	Select-Object -First 1 -ExpandProperty FullName)
-	{
-	$Report = "`n`n$Events`n$Application $Blacklisted`n$RestartThatApp $Item`n$Done"
-		Write-Output "$RestartThatApp $Item`n$Done"
-		Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
-		Start-Process -FilePath $Item
-	}
+	#region RESTART THAT APP
+	$Report = "`n`n$Events`n$AppName $Blacklisted`n$RestartThatApp $AppPath`n$Done"
+	Write-Output -InputObject "$RestartThatApp $AppPath`n$Done"
+	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
+	Start-Process -FilePath $AppPath
 }
 #endregion RESTART THAT APP
 
