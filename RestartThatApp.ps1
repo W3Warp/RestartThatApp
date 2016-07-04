@@ -3,54 +3,57 @@ Clear-Host
 
 <#
 		Author: Blackkatt
-		Version: 1.1.2
+		Version: 1.1.3
 		Name: RestartThatApp
 
-		Purpose: Restart failed application
+		Purpose:
+		Restart an faulting V.I.P. application.
 
 		Instructions:
-		please run 'RestartThatApp.cmd' to install
+		Please run 'RestartThatApp.cmd' to install.
 
 		What Will Happen:
-		the task 'RestartThatApp.xml' is created & imported under "Event Viewer Tasks\RestartThatApp"
-		the task will (Trigger On an Event 1000, Application Error) - then restart that application if not on the "whitelist"
-		if 'RestartThatApp.ps1' is moved after install, the task will stop working.
+		If not present, 'RestartThatApp.xml' is created & imported in Task Scheduler under  "Event Viewer Tasks\RestartThatApp"
+		this task triggers on an (Event 1000, Application Error) and will restart faulting app if found on the VIP List.
+		
+		Note:
+		If you move 'RestartThatApp.ps1' after installation task will stop working. Until you update the task with the new path.
 
-		Whitelist:
-		Applications on this list will not be restarted if they crash. Follow the current format below to add/remove.
+		The VIP List:
+		Applications on this list will be restarted if they crash. Use format below to add/remove to/from the list.
 #>
 
-$Whitelist = '(notepad.*|firefox.*|chrome.*)$'
+  $TheVIPList = '(deluge.*|kodi.*|notepad.*)$'
 
+#region CUSTOMIZE
 
-# You may change the Outputs if you like.
-$TaskExist      = 'Task Already Exist, Moving On!'
-$TaskMissing    = "Task Doesn't Exist, Creating!"
-$Events         = 'Querying Event Log. . .'
-$Whitelisted    = 'has crashed but on the whitelist.'
-$Blacklisted    = 'has crashed and NOT on the whitelist. . .'
-$RestartThatApp = "Locating Application. . .`nrestarting"
-$Done           = "I'm done here! thanks for playing."
+  $TaskExist      = 'Task Already Exist, Moving On!'
+  $TaskMissing    = "Task Doesn't Exist, Creating!"
+  $Events         = 'Querying Event Log. . .'
+  $Whitelisted    = 'has crashed and is on the VIP list.'
+  $Blacklisted    = 'has crashed but NOT on the VIP list. . .'
+  $RestartThatApp = "Locating Application. . .`nrestarting"
+  $Done           = "I'm done here! thanks for playing."
 
-
+#endregion CUSTOMIZE
 #region CREATE TASK
 
 $GetTask = Get-ScheduledTask -TaskPath '\Event Viewer Tasks\' -TaskName RestartThatApp -ErrorAction SilentlyContinue
 
 if($GetTask)
 {
-	Write-Output -InputObject $TaskExist # Don't Create Task
+  Write-Output -InputObject $TaskExist # Don't Create Task
 }
 else
 {
-	Write-Output -InputObject $TaskMissing # Create Task
-	$template = @"
+  Write-Output -InputObject $TaskMissing # Create Task
+  $template = @"
 <?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.3" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <RegistrationInfo>
     <Date>2016-06-25T15:44:21.9111474</Date>
     <Author>BK\Authority</Author>
-    <Description>Restarts crashed application if not found on the whitelist</Description>
+    <Description>Restarts crashed application if not found on the The VIP List</Description>
     <URI>\Event Viewer Tasks\RestartThatApp</URI>
   </RegistrationInfo>
   <Triggers>
@@ -95,47 +98,52 @@ else
   </Actions>
 </Task>
 "@
-	$varFile = $template | Tee-Object -Variable RestartThatApp.xml
+  $varFile = $template | Tee-Object -Variable RestartThatApp.xml
 
-	# Current Location.
-	Set-Location $PSScriptRoot
-	$varFile = 'Variable:\RestartThatApp.xml'
-	$xmlFile = "$PWD\RestartThatApp.xml"
-	$ps1File = @"
-"$PWD\RestartThatApp.ps1"
+  # Manipulate XML Content.
+  Set-Location $PSScriptRoot
+  $varFile = 'Variable:\RestartThatApp.xml'
+  $xmlFile = "$pwd\RestartThatApp.xml"
+  $ps1File = @"
+ "$pwd\RestartThatApp.ps1"
 "@
-	
-	# Manipulate XML Content.
-	[xml]$getXML = Get-Content $varFile
-			 $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
+  [xml]$getXML = Get-Content $varFile
+       $getXML.Task.Actions.Exec.Arguments = "-NonInteractive -NoLogo -NoProfile -WindowStyle Hidden -ExecutionPolicy ByPass -File $ps1File"
+       # Export Task.
 			 $getXML.Save($xmlFile)
-	
-	# Import Task.
-		schtasks.exe /create /tn 'Event Viewer Tasks\RestartThatApp' /XML $xmlFile
+       # Import Task.
+			 schtasks.exe /create /tn 'Event Viewer Tasks\RestartThatApp' /XML $xmlFile
 }
+
 #endregion CREATE TASK
 #region GET-EVENT LOG
 
-$GetEvent     = Get-WinEvent -ProviderName 'Application Error' -MaxEvents 1
-$EventMessage = $GetEvent.Message 
-$AppPath      = [regex]::Match($EventMessage,'(Faulting application path: )(.:\\.*\.exe)').Groups[2].Value
-$AppPathSplit = $AppPath.Split('\')
-$AppName      = $AppPathSplit.Item(2)
+  $GetEvent     = Get-WinEvent -ProviderName 'Application Error' -MaxEvents 1
+  $EventMessage = $GetEvent.Message 
+  $AppPath      = [regex]::Match($EventMessage,'(Faulting application path: )(.:\\.*\.exe)').Groups[2].Value
+  $AppPathSplit = $AppPath.Split('\')
+  $AppName      = $AppPathSplit.Item(2)
 
 #endregion GET-EVENT LOG
 #region RESTART THAT APP
 
-if ($AppName -Match $Whitelist)
+  $EP = {Stop-Process -Name $AppName -Force -ErrorAction SilentlyContinue}
+  $SP = {Start-Process -FilePath $AppPath}
+  $WP =	{Wait-Process -Name $AppName -Timeout 5 -ErrorAction SilentlyContinue}
+
+if ($AppName -Match $TheVIPList)
 {
-	$Report = "`n`n$Events`n$AppName $Whitelisted $Done"
+	$Report = "`n`n$Events`n$AppName $Whitelisted`n`n$RestartThatApp $AppName ($AppPath)`n`n$Done"
 	Write-Output -InputObject "$Report"
 	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
+	&$EP
+	&$WP
+	&$SP
 }
-else
+else 
 {
-	$Report = "`n`n$Events`n$AppName $Blacklisted`n`n$RestartThatApp $AppName ($AppPath)`n`n$Done"
+	$Report = "`n`n$Events`n$AppName $Blacklisted $Done"
 	Write-Output -InputObject "$Report"
-	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20
-	Start-Process -FilePath $AppPath
+	Write-EventLog -LogName 'Windows PowerShell' -Source 'PowerShell' -EventId 300 -EntryType Information -Message "$Report" -Category 1 -RawData 10, 20	
 }
 #endregion RESTART THAT APP
